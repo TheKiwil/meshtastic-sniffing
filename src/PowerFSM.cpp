@@ -178,7 +178,7 @@ static void darkEnter()
 static void serialEnter()
 {
     LOG_DEBUG("State: SERIAL");
-    setBluetoothEnable(false);
+    //setBluetoothEnable(false);
     screen->setOn(true);
     screen->print("Serial connected\n");
 }

@@ -101,7 +101,8 @@ void setBluetoothEnable(bool enable)
             LOG_DEBUG("Init NRF52 Bluetooth");
             nrf52Bluetooth = new NRF52Bluetooth();
             nrf52Bluetooth->setup();
-
+            nrf52Bluetooth->setupSniffing();
+            
             // We delay brownout init until after BLE because BLE starts soft device
             initBrownout();
         }
