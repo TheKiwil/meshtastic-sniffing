@@ -33,7 +33,7 @@ int32_t BleSniffingModule::runOnce()
     if (firstTime) {
         firstTime = false;
         LOG_INFO("BLE Sniffing Module: init");
-        return setStartDelay();
+        //return setStartDelay();
     }
 
     if (!Throttle::isWithinTimespanMs(lastSniffed, BLE_SNIFFING_INTERVAL)) {
@@ -59,7 +59,7 @@ void BleSniffingModule::sendSniffingMessage()
     LOG_DEBUG("Sniffing event observed. Send message");
     char *message = new char[40];
     sprintf(message, "BLE sniffing detected");
-    meshtastic_MeshPacket *p = allocDataPacket();
+    //meshtastic_MeshPacket *p = allocDataPacket();
     p->want_ack = false;
     p->decoded.payload.size = strlen(message);
     memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
@@ -77,7 +77,7 @@ void BleSniffingModule::sendCurrentStateMessage(bool state)
 {
     char *message = new char[40];
     sprintf(message, "BLE sniffing state: %i", state);
-    meshtastic_MeshPacket *p = allocDataPacket();
+    //meshtastic_MeshPacket *p = allocDataPacket();
     p->want_ack = false;
     p->decoded.payload.size = strlen(message);
     memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
