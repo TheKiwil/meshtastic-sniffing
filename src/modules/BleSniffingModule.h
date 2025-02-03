@@ -1,8 +1,13 @@
 #pragma once
 #include "SinglePortModule.h"
 
-class BleSniffingModule : private concurrency::OSThread
+class BleSniffingModule : public SinglePortModule, private concurrency::OSThread
 {
+  public:
+    BleSniffingModule() : SinglePortModule("sniffing", meshtastic_PortNum_SNIFFING_APP), OSThread("SniffingBLE")
+    {
+    }
+
   protected:
     virtual int32_t runOnce() override;
 

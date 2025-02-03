@@ -90,6 +90,10 @@
 #include "modules/DropzoneModule.h"
 #endif
 
+//#if !MESHTASTIC_EXCLUDE_SNIFFING
+#include "modules/BleSniffingModule.h"
+//#endif
+
 /**
  * Create module instances here.  If you are adding a new module, you must 'new' it here (or somewhere else)
  */
@@ -126,6 +130,9 @@ void setupModules()
 #if !MESHTASTIC_EXCLUDE_ATAK
         atakPluginModule = new AtakPluginModule();
 #endif
+//#if !MESHTASTIC_EXCLUDE_SNIFFING
+        bleSniffingModule = new BleSniffingModule();    
+//#endif
 
 #if !MESHTASTIC_EXCLUDE_DROPZONE
         dropzoneModule = new DropzoneModule();

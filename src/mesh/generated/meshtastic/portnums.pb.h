@@ -132,6 +132,7 @@ typedef enum _meshtastic_PortNum {
  To simplify initial development and testing you can use "PRIVATE_APP"
  in your code without needing to rebuild protobuf files (via [regen-protos.sh](https://github.com/meshtastic/firmware/blob/master/bin/regen-protos.sh)) */
     meshtastic_PortNum_PRIVATE_APP = 256,
+    meshtastic_PortNum_SNIFFING_APP = 257,
     /* ATAK Forwarder Module https://github.com/paulmandal/atak-forwarder
  ENCODING: libcotshrink */
     meshtastic_PortNum_ATAK_FORWARDER = 257,

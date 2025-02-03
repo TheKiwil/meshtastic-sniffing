@@ -374,3 +374,50 @@ void NRF52Bluetooth::sendLog(const uint8_t *logMessage, size_t length)
     else
         logRadio.notify(logMessage, (uint16_t)length);
 }
+
+// Add scanning (sniffing) function
+//
+// 
+void NRF52Bluetooth::scan_callback(ble_gap_evt_adv_report_t* report)
+{
+    uint8_t len = 0;
+    uint8_t buffer[32];
+    char mac_addr[18]={0};
+    memset(buffer, 0, sizeof(buffer));
+      
+    // XX:XX:XX:XX:XX:XX + null terminator
+    sprintf(mac_addr, "%02X:%02X:%02X:%02X:%02X:%02X",
+            report->peer_addr.addr[5], report->peer_addr.addr[4], 
+            report->peer_addr.addr[3], report->peer_addr.addr[2], 
+            report->peer_addr.addr[1], report->peer_addr.addr[0]);
+
+    LOG_INFO("MAC:%s, RSSI:%d", mac_addr, report->rssi);
+
+    Bluefruit.Scanner.resume();
+}
+
+void NRF52Bluetooth::setupSniffing(uint16_t delayS)
+{   
+    /* Initialise the Bluefruit module
+    LOG_INFO("Init the Bluefruit nRF52 module");
+    Bluefruit.autoConnLed(false);
+    Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
+    Bluefruit.begin();
+
+    // Set the advertised device name (keep it short!)
+    Bluefruit.setName(getDeviceName()); */
+    Bluefruit.Scanner.stop();
+    Bluefruit.Scanner.setRxCallback(scan_callback);
+    Bluefruit.Scanner.restartOnDisconnect(true);
+    //Bluefruit.Scanner.filterRssi(-80);
+    //Bluefruit.Scanner.filterUuid(BLEUART_UUID_SERVICE); // only invoke callback if detect bleuart service
+    Bluefruit.Scanner.setInterval(160, 80);       // in units of 0.625 ms
+    Bluefruit.Scanner.useActiveScan(false);        // Request scan response data
+    Bluefruit.Scanner.start(delayS); 
+    
+    //while (!scanComplete && (millis() - scanStartTime < scanDuration)) {
+        // Attendre la fin du scan sans bloquer le programme
+    //    delay(1);
+    //}
+    //Bluefruit.Scanner.stop();  
+}
