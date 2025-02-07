@@ -9,8 +9,8 @@
 
 BleSniffingModule *bleSniffingModule;
 
-#define BLE_SNIFFING_INTERVAL 30*1000
-
+#define BLE_SNIFFING_INTERVAL 60*1000
+#define BLE_SNIFFING_MAX_BEACONS 3
 typedef enum {
     BleSniffingVerdictDetected,
     BleSniffingVerdictSendState,
@@ -38,24 +38,16 @@ int32_t BleSniffingModule::runOnce()
     }
 
     if (!Throttle::isWithinTimespanMs(lastSniffed, BLE_SNIFFING_INTERVAL)) {
-        bool isDetected = hasSniffingEvent();
-        BleSniffingTriggerVerdict verdict = handlers[0](wasDetected, isDetected);
-        wasDetected = isDetected;
-        lastSniffed = millis();
-        /*
-        switch (verdict) {
-        case BleSniffingVerdictDetected:
+        if (hasSniffingEvent()){
+            LOG_DEBUG("Sniffing event detected");
+
+            //TODO: Send meZssage
             sendSniffingMessage();
-            return BLE_SNIFFING_INTERVAL;
-        case BleSniffingVerdictSendState:
-            sendCurrentStateMessage(isDetected);
-            return BLE_SNIFFING_INTERVAL;
-        case BleSniffingVerdictNoop:
+        } else {
+            LOG_DEBUG("No sniffing event detected");
+        }
 
-            return BLE_SNIFFING_INTERVAL;
-        }*/
-
-        
+        lastSniffed = millis();        
     }
     return BLE_SNIFFING_INTERVAL;
 }
@@ -63,61 +55,48 @@ int32_t BleSniffingModule::runOnce()
 void BleSniffingModule::sendSniffingMessage()
 {
     LOG_DEBUG("Sniffing event observed. Send message");
-    char *message = new char[40];
-    sprintf(message, "BLE sniffing detected");
-    meshtastic_MeshPacket *p = allocDataPacket();
-    p->want_ack = false;
-    p->decoded.payload.size = strlen(message);
-    memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
-    lastSniffed = millis();
-    if (!channels.isDefaultChannel(0)) {
-        LOG_INFO("Send message id=%d, dest=%x, msg=%.*s", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
-        service->sendToMesh(p);
-    } else {
-        LOG_ERROR("Message not allowed on Public channel");
-    }
-    delete[] message;
-}
+    char *bleBeacons = new char[BLE_SNIFFING_MAX_BEACONS*14];
+    memset(bleBeacons, 0, BLE_SNIFFING_MAX_BEACONS*14);
 
-void BleSniffingModule::sendCurrentStateMessage(bool state)
-{
-    char *message = new char[40];
-    sprintf(message, "BLE sniffing state: %i", state);
+    #ifdef ARCH_NRF52
+    nrf52Bluetooth->getBeaconsMacAddr(bleBeacons, (BLE_SNIFFING_MAX_BEACONS*14), BLE_SNIFFING_MAX_BEACONS);
+    #endif
+
+    // Add "BLE:" prefix to the message
+    char *message = new char[strlen(bleBeacons) + 5];
+    strcpy(message, "BLE:");
+    strcat(message, bleBeacons);
+    
     meshtastic_MeshPacket *p = allocDataPacket();
+    p->to = NODENUM_BROADCAST;
+    p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
     p->want_ack = false;
     p->decoded.payload.size = strlen(message);
     memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
     lastSniffed = millis();
-    if (!channels.isDefaultChannel(0)) {
-        LOG_INFO("Send message id=%d, dest=%x, msg=%.*s", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
-        service->sendToMesh(p);
-    } else {
-        LOG_ERROR("Message not allowed on Public channel");
-    }
+    service->sendToMesh(p, RX_SRC_LOCAL, true);
+    
     delete[] message;
+    delete[] bleBeacons;
 }
 
 bool BleSniffingModule::hasSniffingEvent()
 {
-    //#ifdef ARCH_NRF52
-        LOG_INFO("Before NRF52Bluetooth");
-        //nrf52Bluetooth = new NRF52Bluetooth();
+    bool detected = false;
+
+    #ifdef ARCH_NRF52
         // If not yet set-up
         if (!nrf52Bluetooth) {
             LOG_DEBUG("Init NRF52 Bluetooth");
             nrf52Bluetooth = new NRF52Bluetooth();
-            nrf52Bluetooth->setupSniffing(10);
-
-            // We delay brownout init until after BLE because BLE starts soft device
-           // initBrownout();
-        }
-        // Already setup, apparently
-        else
+            nrf52Bluetooth->setupSniffing();
+            detected = nrf52Bluetooth->startSniffing(5);            
+        }       
+        else{ // Already setup, apparently
             LOG_DEBUG("Already setup NRF52 Bluetooth");
-            nrf52Bluetooth->setupSniffing(100);
-    //#endif
+            detected = nrf52Bluetooth->startSniffing(5);
+        }    
+    #endif
 
-    lastSniffed = millis();
-    // Implémentez la logique de détection de sniffing BLE ici
-    return 2;
+    return detected;
 }

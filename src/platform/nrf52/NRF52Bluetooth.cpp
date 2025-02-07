@@ -29,7 +29,8 @@ static uint8_t fromRadioBytes[meshtastic_FromRadio_size];
 static uint8_t toRadioBytes[meshtastic_ToRadio_size];
 
 static uint16_t connectionHandle;
-
+uint32_t NRF52Bluetooth::numberOfBeacon = 0;
+std::vector<BeaconEntry> NRF52Bluetooth::seenBeacons;
 class BluetoothPhoneAPI : public PhoneAPI
 {
     /**
@@ -378,46 +379,100 @@ void NRF52Bluetooth::sendLog(const uint8_t *logMessage, size_t length)
 // Add scanning (sniffing) function
 //
 // 
+void NRF52Bluetooth::setupSniffing()
+{
+    // Initialise the Bluefruit module (minimum for sniffing)
+    Bluefruit.begin();
+    Bluefruit.setTxPower(-40);
+
+    /* Set the device name */
+    Bluefruit.setName(getDeviceName());
+}
+
 void NRF52Bluetooth::scan_callback(ble_gap_evt_adv_report_t* report)
 {
     uint8_t len = 0;
     uint8_t buffer[32];
     char mac_addr[18]={0};
     memset(buffer, 0, sizeof(buffer));
-      
+    bool isDuplicate = false;
+    uint32_t now = millis();
+    ble_gap_addr_t addr = report->peer_addr;
+
+    // Check for duplicates
+    for(const auto &entry : seenBeacons) {
+        if(memcmp(&entry.addr, &addr, sizeof(ble_gap_addr_t)) == 0) {
+            isDuplicate = true;
+            break;
+        }
+    }
+
+    // If it's a duplicate, return early
+    if(isDuplicate) {
+        Bluefruit.Scanner.resume();
+        return;
+    }    
+
     // XX:XX:XX:XX:XX:XX + null terminator
-    sprintf(mac_addr, "%02X:%02X:%02X:%02X:%02X:%02X",
+    sprintf(mac_addr, "%02X%02X%02X%02X%02X%02X",
             report->peer_addr.addr[5], report->peer_addr.addr[4], 
             report->peer_addr.addr[3], report->peer_addr.addr[2], 
             report->peer_addr.addr[1], report->peer_addr.addr[0]);
 
+    // Add new beacon to seen list
+    if(seenBeacons.size() < MAX_BEACONS) {
+        seenBeacons.push_back(BeaconEntry{addr, now, {0}, report->rssi});
+        strncpy(seenBeacons.back().mac_addr, mac_addr, sizeof(seenBeacons.back().mac_addr) - 1);
+        seenBeacons.back().mac_addr[sizeof(seenBeacons.back().mac_addr) - 1] = '\0';
+    }
+
     LOG_INFO("MAC:%s, RSSI:%d", mac_addr, report->rssi);
+    numberOfBeacon++;
 
     Bluefruit.Scanner.resume();
 }
 
-void NRF52Bluetooth::setupSniffing(uint16_t delayS)
-{   
-    /* Initialise the Bluefruit module
-    LOG_INFO("Init the Bluefruit nRF52 module");
-    Bluefruit.autoConnLed(false);
-    Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
-    Bluefruit.begin();
+void NRF52Bluetooth::getBeaconsMacAddr(char* buffer, size_t bufferSize, size_t count) {
+    size_t offset = 0;
+    for(size_t i = 0; i < count && i < seenBeacons.size(); ++i) {
+        const auto& beacon = seenBeacons[i];
+        int written = snprintf(buffer + offset, bufferSize - offset, "%s,", beacon.mac_addr);
+        LOG_INFO("DBG written: %s", buffer);
+        if (written < 0 || static_cast<size_t>(written) >= bufferSize - offset) {
+            LOG_INFO("DBG Break - Not enough space in buffer");
+            break; // Buffer is full or an error occurred
+        }
+        offset += written;
+    }
+    if (offset > 0 && offset < bufferSize) {
+        buffer[offset - 1] = '\0'; // Replace the last space with a null terminator
+    }
+}
 
-    // Set the advertised device name (keep it short!)
-    Bluefruit.setName(getDeviceName()); */
-    Bluefruit.Scanner.stop();
+bool NRF52Bluetooth::startSniffing(uint16_t delayS)
+{   
+    unsigned long scanStartTime = millis();
+    uint16_t scanDuration = delayS * 1000;
+    numberOfBeacon = 0;
+
+    // Clear seen beacons
+    seenBeacons.clear();
+    
+    // Start scanning
     Bluefruit.Scanner.setRxCallback(scan_callback);
     Bluefruit.Scanner.restartOnDisconnect(true);
-    //Bluefruit.Scanner.filterRssi(-80);
-    //Bluefruit.Scanner.filterUuid(BLEUART_UUID_SERVICE); // only invoke callback if detect bleuart service
     Bluefruit.Scanner.setInterval(160, 80);       // in units of 0.625 ms
     Bluefruit.Scanner.useActiveScan(false);        // Request scan response data
-    Bluefruit.Scanner.start(delayS); 
+    Bluefruit.Scanner.start(0); 
     
-    //while (!scanComplete && (millis() - scanStartTime < scanDuration)) {
-        // Attendre la fin du scan sans bloquer le programme
-    //    delay(1);
-    //}
-    //Bluefruit.Scanner.stop();  
+    // Wait until scan is complete
+    while (millis() - scanStartTime < scanDuration) {
+        delay(1);
+    }
+    Bluefruit.Scanner.stop(); 
+
+    // Sort beacons by RSSI
+    std::sort(seenBeacons.begin(), seenBeacons.end(), CompareBeaconRSSI());
+
+    return (numberOfBeacon > 0);
 }

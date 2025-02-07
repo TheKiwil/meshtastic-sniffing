@@ -16,7 +16,6 @@ class BleSniffingModule : public SinglePortModule, private concurrency::OSThread
     uint32_t lastSniffed = 0;
     bool wasDetected = false;
     void sendSniffingMessage();
-    void sendCurrentStateMessage(bool state);
     bool hasSniffingEvent();
 };
 

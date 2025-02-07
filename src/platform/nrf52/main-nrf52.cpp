@@ -115,9 +115,52 @@ void setBluetoothEnable(bool enable)
         nrf52Bluetooth->shutdown();
     }
 }
+
+void setSniffingEnable(bool enable){
+    // For debugging use: don't use bluetooth
+    if (!useSoftDevice) {
+        if (enable)
+            LOG_INFO("Disable NRF52 BLUETOOTH WHILE DEBUGGING");
+        return;
+    }
+
+    // If user disabled bluetooth: init then disable advertising & reduce power
+    // Workaround. Avoid issue where device hangs several days after boot..
+    // Allegedly, no significant increase in power consumption
+    if (!config.bluetooth.enabled) {
+        static bool initialized = false;
+        if (!initialized) {
+            nrf52Bluetooth = new NRF52Bluetooth();
+            nrf52Bluetooth->startDisabled();
+            initBrownout();
+            initialized = true;
+        }
+        return;
+    }
+
+    if (enable) {
+        powerMon->setState(meshtastic_PowerMon_State_BT_On);
+
+        // If not yet set-up
+        if (!nrf52Bluetooth) {
+            LOG_DEBUG("Init NRF52 Bluetooth");
+            nrf52Bluetooth = new NRF52Bluetooth();
+            nrf52Bluetooth->setupSniffing();
+
+            // We delay brownout init until after BLE because BLE starts soft device
+            initBrownout();
+        }
+    }
+    // Disable (if previously set-up)
+    else if (nrf52Bluetooth) {
+        powerMon->clearState(meshtastic_PowerMon_State_BT_On);
+        nrf52Bluetooth->shutdown();
+    }
+}
 #else
 #warning NRF52 "Bluetooth disable" workaround does not apply to builds with MESHTASTIC_EXCLUDE_BLUETOOTH
 void setBluetoothEnable(bool enable) {}
+void setSniffingEnable(bool enable){}
 #endif
 /**
  * Override printf to use the SEGGER output library (note - this does not effect the printf method on the debug console)

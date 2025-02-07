@@ -6,5 +6,6 @@
 
 // Enable/disable bluetooth.
 void setBluetoothEnable(bool enable);
+void setSniffingEnable(bool enable);
 
 void getMacAddr(uint8_t *dmac);
