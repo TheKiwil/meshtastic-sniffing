@@ -9,7 +9,7 @@
 
 BleSniffingModule *bleSniffingModule;
 
-#define BLE_SNIFFING_INTERVAL 60*1000
+#define BLE_SNIFFING_INTERVAL 120*1000
 #define BLE_SNIFFING_MAX_BEACONS 3
 typedef enum {
     BleSniffingVerdictDetected,
@@ -40,14 +40,13 @@ int32_t BleSniffingModule::runOnce()
     if (!Throttle::isWithinTimespanMs(lastSniffed, BLE_SNIFFING_INTERVAL)) {
         if (hasSniffingEvent()){
             LOG_DEBUG("Sniffing event detected");
-
-            //TODO: Send meZssage
             sendSniffingMessage();
         } else {
+            lastSniffed = millis();
             LOG_DEBUG("No sniffing event detected");
         }
 
-        lastSniffed = millis();        
+        //lastSniffed = millis();        
     }
     return BLE_SNIFFING_INTERVAL;
 }
@@ -69,13 +68,14 @@ void BleSniffingModule::sendSniffingMessage()
     
     meshtastic_MeshPacket *p = allocDataPacket();
     p->to = NODENUM_BROADCAST;
-    p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
+    p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
     p->want_ack = false;
+    p->decoded.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
     p->decoded.payload.size = strlen(message);
     memcpy(p->decoded.payload.bytes, message, p->decoded.payload.size);
     lastSniffed = millis();
     service->sendToMesh(p, RX_SRC_LOCAL, true);
-    
+
     delete[] message;
     delete[] bleBeacons;
 }
