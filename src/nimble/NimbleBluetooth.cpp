@@ -316,12 +316,12 @@ void clearNVS()
 void NimbleBluetooth::setupSniffing()
 {
     if (!NimBLEDevice::getInitialized()) {
-        NimBLEDevice::init("Meshtastic-Sniffer");
+        NimBLEDevice::init(getDeviceName());
     }
     
     pBLEScan = NimBLEDevice::getScan();
     pBLEScan->setAdvertisedDeviceCallbacks(scanCallbacks);
-    pBLEScan->setActiveScan(true);
+    pBLEScan->setActiveScan(false);
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
 }
