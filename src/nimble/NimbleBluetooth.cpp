@@ -2,6 +2,7 @@
 #if !MESHTASTIC_EXCLUDE_BLUETOOTH
 #include "BluetoothCommon.h"
 #include "NimbleBluetooth.h"
+#include <vector>
 #include "PowerFSM.h"
 
 #include "main.h"
@@ -16,6 +17,19 @@ NimBLECharacteristic *logRadioCharacteristic;
 NimBLEServer *bleServer;
 
 static bool passkeyShowing;
+static std::vector<std::string> foundDevices;
+
+class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
+    void onResult(NimBLEAdvertisedDevice* advertisedDevice) override {
+        std::string address = advertisedDevice->getAddress().toString();
+        // Only add unique addresses
+        if (std::find(foundDevices.begin(), foundDevices.end(), address) == foundDevices.end()) {
+            foundDevices.push_back(address);
+        }
+    }
+};
+
+static ScanCallbacks* scanCallbacks = new ScanCallbacks();
 
 class BluetoothPhoneAPI : public PhoneAPI
 {
@@ -297,5 +311,56 @@ void clearNVS()
 #ifdef ARCH_ESP32
     ESP.restart();
 #endif
+}
+
+void NimbleBluetooth::setupSniffing()
+{
+    if (!NimBLEDevice::getInitialized()) {
+        NimBLEDevice::init("Meshtastic-Sniffer");
+    }
+    
+    pBLEScan = NimBLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(scanCallbacks);
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);
+}
+
+void NimbleBluetooth::startSniffing(uint16_t delayS)
+{
+    if (!pBLEScan) {
+        setupSniffing();
+    }
+    
+    // Clear previous results
+    foundDevices.clear();
+    pBLEScan->clearResults();
+    
+    // Start scanning
+    pBLEScan->start(delayS, false);
+}
+
+void NimbleBluetooth::getBeaconsMacAddr(char* buffer, size_t bufferSize, size_t count)
+{
+    if (!buffer || bufferSize == 0) {
+        return;
+    }
+    
+    // Format MAC addresses into the provided buffer
+    size_t written = 0;
+    size_t devicesFound = std::min(count, foundDevices.size());
+    
+    buffer[0] = '\0';
+    for (size_t i = 0; i < devicesFound; i++) {
+        size_t remaining = bufferSize - written;
+        if (remaining <= 1) break;  // No space left for more addresses
+        
+        int result = snprintf(buffer + written, remaining, "%s%s", 
+                            i > 0 ? "," : "", // Add comma between addresses
+                            foundDevices[i].c_str());
+                            
+        if (result < 0 || result >= remaining) break;
+        written += result;
+    }
 }
 #endif
