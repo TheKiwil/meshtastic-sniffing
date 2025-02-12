@@ -31,7 +31,7 @@ class NRF52Bluetooth : BluetoothApi
     int getRssi();
     void sendLog(const uint8_t *logMessage, size_t length);
         
-    // Add scanning (sniffing) function test
+    // Add scanning (sniffing) function testv
     void setupSniffing();
     bool startSniffing(uint16_t delayS);
     void getBeaconsMacAddr(char* buffer, size_t bufferSize, size_t count);
