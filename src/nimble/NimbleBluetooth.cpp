@@ -17,7 +17,6 @@ NimBLECharacteristic *logRadioCharacteristic;
 NimBLEServer *bleServer;
 
 static bool passkeyShowing;
-static std::vector<std::string> foundDevices;
 std::vector<BeaconEntry> NimbleBluetooth::seenBeacons;
 
 class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks
@@ -26,14 +25,41 @@ class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks
     {
         char mac_addr[18] = {0};
         uint32_t now = millis();
+        bool isDuplicate = false;
 
-        std::string address = advertisedDevice->getAddress().toString();
-        // Only add unique addresses
-        if (std::find(foundDevices.begin(), foundDevices.end(), address) == foundDevices.end())
+        // Get the address
+        NimBLEAddress addr = advertisedDevice->getAddress();
+
+        // Check for duplicates
+        for (const auto &entry : NimbleBluetooth::seenBeacons)
         {
-            LOG_DEBUG("DBG - detected");
-            foundDevices.push_back(address);
+            if (entry.addr == addr)
+            {
+                isDuplicate = true;
+                break;
+            }
         }
+
+        // If it's a duplicate, return early
+        if (isDuplicate)
+            return;
+
+        // Format MAC address string (remove colons and convert to uppercase)
+        NimbleBluetooth::formatMacAddress(addr.toString(), mac_addr, sizeof(mac_addr));
+
+        // Add new beacon to seen list
+        if (NimbleBluetooth::seenBeacons.size() < MAX_BEACONS)
+        {
+            NimbleBluetooth::seenBeacons.push_back(BeaconEntry{
+                addr,
+                now,
+                {0},
+                static_cast<int8_t>(advertisedDevice->getRSSI())});
+            strncpy(NimbleBluetooth::seenBeacons.back().mac_addr, mac_addr, sizeof(NimbleBluetooth::seenBeacons.back().mac_addr) - 1);
+            NimbleBluetooth::seenBeacons.back().mac_addr[sizeof(NimbleBluetooth::seenBeacons.back().mac_addr) - 1] = '\0';
+        }
+
+        LOG_INFO("MAC:%s, RSSI:%d", mac_addr, advertisedDevice->getRSSI());
     }
 };
 
@@ -334,6 +360,22 @@ void clearNVS()
 #endif
 }
 
+void NimbleBluetooth::formatMacAddress(const std::string &input, char *output, size_t outputSize)
+{
+    if (!output || outputSize < 13) // Need at least 12 chars for MAC + null terminator
+        return;
+
+    size_t j = 0;
+    for (size_t i = 0; i < input.length() && j < outputSize - 1; i++)
+    {
+        if (input[i] != ':')
+        {
+            output[j++] = std::toupper(input[i]);
+        }
+    }
+    output[j] = '\0';
+}
+
 void NimbleBluetooth::setupSniffing()
 {
     if (!NimBLEDevice::getInitialized())
@@ -356,7 +398,7 @@ bool NimbleBluetooth::startSniffing(uint16_t delayS)
     }
 
     // Clear previous results
-    foundDevices.clear();
+    seenBeacons.clear();
     pBLEScan->clearResults();
 
     // Start scanning
@@ -364,34 +406,32 @@ bool NimbleBluetooth::startSniffing(uint16_t delayS)
     pBLEScan->start(delayS, false);
     pBLEScan->stop();
 
-    return (foundDevices.size() > 0);
+    // Sort beacons by RSSI
+    std::sort(seenBeacons.begin(), seenBeacons.end(), CompareBeaconRSSI());
+
+    return (seenBeacons.size() > 0);
 }
 
 void NimbleBluetooth::getBeaconsMacAddr(char *buffer, size_t bufferSize, size_t count)
 {
     if (!buffer || bufferSize == 0)
-    {
         return;
-    }
 
-    // Format MAC addresses into the provided buffer
-    size_t written = 0;
-    size_t devicesFound = std::min(count, foundDevices.size());
-
-    buffer[0] = '\0';
-    for (size_t i = 0; i < devicesFound; i++)
+    size_t offset = 0;
+    for (size_t i = 0; i < count && i < seenBeacons.size(); ++i)
     {
-        size_t remaining = bufferSize - written;
-        if (remaining <= 1)
-            break; // No space left for more addresses
-
-        int result = snprintf(buffer + written, remaining, "%s%s",
-                              i > 0 ? "," : "", // Add comma between addresses
-                              foundDevices[i].c_str());
-
-        if (result < 0 || result >= remaining)
-            break;
-        written += result;
+        const auto &beacon = seenBeacons[i];
+        int written = snprintf(buffer + offset, bufferSize - offset, "%s,", beacon.mac_addr);
+        LOG_INFO("DBG written: %s", buffer);
+        if (written < 0 || static_cast<size_t>(written) >= bufferSize - offset)
+        {
+            break; // Buffer is full or an error occurred
+        }
+        offset += written;
+    }
+    if (offset > 0 && offset < bufferSize)
+    {
+        buffer[offset - 1] = '\0'; // Replace the last comma with a null terminator
     }
 }
 #endif

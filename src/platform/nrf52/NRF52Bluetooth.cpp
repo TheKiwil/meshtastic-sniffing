@@ -19,7 +19,7 @@ static BLEBas blebas; // BAS (Battery Service) helper class instance
 #ifndef BLE_DFU_SECURE
 static BLEDfu bledfu; // DFU software update helper service
 #else
-static BLEDfuSecure bledfusecure;                                             // DFU software update helper service
+static BLEDfuSecure bledfusecure; // DFU software update helper service
 #endif
 
 // This scratch buffer is used for various bluetooth reads/writes - but it is safe because only one bt operation can be in
@@ -67,7 +67,8 @@ void onConnect(uint16_t conn_handle)
 void onDisconnect(uint16_t conn_handle, uint8_t reason)
 {
     LOG_INFO("BLE Disconnected, reason = 0x%x", reason);
-    if (bluetoothPhoneAPI) {
+    if (bluetoothPhoneAPI)
+    {
         bluetoothPhoneAPI->close();
     }
 }
@@ -81,11 +82,15 @@ void onCccd(uint16_t conn_hdl, BLECharacteristic *chr, uint16_t cccd_value)
     // According to the GATT spec: cccd value = 0x0001 means notifications are enabled
     // and cccd value = 0x0002 means indications are enabled
 
-    if (chr->uuid == fromNum.uuid || chr->uuid == logRadio.uuid) {
+    if (chr->uuid == fromNum.uuid || chr->uuid == logRadio.uuid)
+    {
         auto result = cccd_value == 2 ? chr->indicateEnabled(conn_hdl) : chr->notifyEnabled(conn_hdl);
-        if (result) {
+        if (result)
+        {
             LOG_INFO("Notify/Indicate enabled");
-        } else {
+        }
+        else
+        {
             LOG_INFO("Notify/Indicate disabled");
         }
     }
@@ -113,7 +118,7 @@ void startAdv(void)
     Bluefruit.Advertising.restartOnDisconnect(true);
     Bluefruit.Advertising.setInterval(32, 244); // in unit of 0.625 ms
     Bluefruit.Advertising.setFastTimeout(30);   // number of seconds in fast mode
-    Bluefruit.Advertising.start(0); // 0 = Don't stop advertising after n seconds.  FIXME, we should stop advertising after X
+    Bluefruit.Advertising.start(0);             // 0 = Don't stop advertising after n seconds.  FIXME, we should stop advertising after X
 }
 // Just ack that the caller is allowed to read
 static void authorizeRead(uint16_t conn_hdl)
@@ -127,13 +132,16 @@ static void authorizeRead(uint16_t conn_hdl)
  */
 void onFromRadioAuthorize(uint16_t conn_hdl, BLECharacteristic *chr, ble_gatts_evt_read_t *request)
 {
-    if (request->offset == 0) {
+    if (request->offset == 0)
+    {
         // If the read is long, we will get multiple authorize invocations - we only populate data on the first
         size_t numBytes = bluetoothPhoneAPI->getFromRadio(fromRadioBytes);
         // Someone is going to read our value as soon as this callback returns.  So fill it with the next message in the queue
         // or make empty if the queue is empty
         fromRadio.write(fromRadioBytes, numBytes);
-    } else {
+    }
+    else
+    {
         // LOG_INFO("Ignore successor read");
     }
     authorizeRead(conn_hdl);
@@ -144,11 +152,14 @@ static uint8_t lastToRadio[MAX_TO_FROM_RADIO_SIZE];
 void onToRadioWrite(uint16_t conn_hdl, BLECharacteristic *chr, uint8_t *data, uint16_t len)
 {
     LOG_INFO("toRadioWriteCb data %p, len %u", data, len);
-    if (memcmp(lastToRadio, data, len) != 0) {
+    if (memcmp(lastToRadio, data, len) != 0)
+    {
         LOG_DEBUG("New ToRadio packet");
         memcpy(lastToRadio, data, len);
         bluetoothPhoneAPI->handleToRadio(data, len);
-    } else {
+    }
+    else
+    {
         LOG_DEBUG("Drop dup ToRadio packet we just saw");
     }
 }
@@ -179,7 +190,7 @@ void setupMeshService(void)
     fromRadio.setMaxLen(sizeof(fromRadioBytes));
     fromRadio.setReadAuthorizeCallback(
         onFromRadioAuthorize,
-        false); // We don't call this callback via the adafruit queue, because we can safely run in the BLE context
+        false);                                                  // We don't call this callback via the adafruit queue, because we can safely run in the BLE context
     fromRadio.setBuffer(fromRadioBytes, sizeof(fromRadioBytes)); // we preallocate our fromradio buffer so we won't waste space
     // for two copies
     fromRadio.begin();
@@ -206,8 +217,10 @@ void NRF52Bluetooth::shutdown()
     // Shutdown bluetooth for minimum power draw
     LOG_INFO("Disable NRF52 bluetooth");
     uint8_t connection_num = Bluefruit.connected();
-    if (connection_num) {
-        for (uint8_t i = 0; i < connection_num; i++) {
+    if (connection_num)
+    {
+        for (uint8_t i = 0; i < connection_num; i++)
+        {
             LOG_INFO("NRF52 bluetooth disconnecting handle %d", i);
             Bluefruit.disconnect(i);
         }
@@ -246,7 +259,8 @@ void NRF52Bluetooth::setup()
     Bluefruit.Advertising.stop();
     Bluefruit.Advertising.clearData();
     Bluefruit.ScanResponse.clearData();
-    if (config.bluetooth.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN) {
+    if (config.bluetooth.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
         configuredPasskey = config.bluetooth.mode == meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN
                                 ? config.bluetooth.fixed_pin
                                 : random(100000, 999999);
@@ -258,7 +272,9 @@ void NRF52Bluetooth::setup()
         Bluefruit.Security.setPairCompleteCallback(NRF52Bluetooth::onPairingCompleted);
         Bluefruit.Security.setSecuredCallback(NRF52Bluetooth::onConnectionSecured);
         meshBleService.setPermission(SECMODE_ENC_WITH_MITM, SECMODE_ENC_WITH_MITM);
-    } else {
+    }
+    else
+    {
         Bluefruit.Security.setIOCaps(false, false, false);
         meshBleService.setPermission(SECMODE_OPEN, SECMODE_OPEN);
     }
@@ -321,7 +337,8 @@ bool NRF52Bluetooth::onPairingPasskey(uint16_t conn_handle, uint8_t const passke
     LOG_INFO("BLE pair process started with passkey %.3s %.3s", passkey, passkey + 3);
     powerFSM.trigger(EVENT_BLUETOOTH_PAIR);
 #if !defined(MESHTASTIC_EXCLUDE_SCREEN)
-    screen->startAlert([](OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) -> void {
+    screen->startAlert([](OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) -> void
+                       {
         char btPIN[16] = "888888";
         snprintf(btPIN, sizeof(btPIN), "%06u", configuredPasskey);
         int x_offset = display->width() / 2;
@@ -344,12 +361,13 @@ bool NRF52Bluetooth::onPairingPasskey(uint16_t conn_handle, uint8_t const passke
         String deviceName = "Name: ";
         deviceName.concat(getDeviceName());
         y_offset = display->height() == 64 ? y_offset + FONT_HEIGHT_LARGE - 6 : y_offset + FONT_HEIGHT_LARGE + 5;
-        display->drawString(x_offset + x, y_offset + y, deviceName);
-    });
+        display->drawString(x_offset + x, y_offset + y, deviceName); });
 #endif
-    if (match_request) {
+    if (match_request)
+    {
         uint32_t start_time = millis();
-        while (millis() < start_time + 30000) {
+        while (millis() < start_time + 30000)
+        {
             if (!Bluefruit.connected(conn_handle))
                 break;
         }
@@ -378,7 +396,7 @@ void NRF52Bluetooth::sendLog(const uint8_t *logMessage, size_t length)
 
 // Add scanning (sniffing) function
 //
-// 
+//
 void NRF52Bluetooth::setupSniffing()
 {
     // Initialise the Bluefruit module (minimum for sniffing)
@@ -389,38 +407,40 @@ void NRF52Bluetooth::setupSniffing()
     Bluefruit.setName(getDeviceName());
 }
 
-void NRF52Bluetooth::scan_callback(ble_gap_evt_adv_report_t* report)
+void NRF52Bluetooth::scan_callback(ble_gap_evt_adv_report_t *report)
 {
-    uint8_t len = 0;
-    uint8_t buffer[32];
-    char mac_addr[18]={0};
-    memset(buffer, 0, sizeof(buffer));
+    // uint8_t len = 0;
+    char mac_addr[18] = {0};
     bool isDuplicate = false;
     uint32_t now = millis();
     ble_gap_addr_t addr = report->peer_addr;
 
     // Check for duplicates
-    for(const auto &entry : seenBeacons) {
-        if(memcmp(&entry.addr, &addr, sizeof(ble_gap_addr_t)) == 0) {
+    for (const auto &entry : seenBeacons)
+    {
+        if (memcmp(&entry.addr, &addr, sizeof(ble_gap_addr_t)) == 0)
+        {
             isDuplicate = true;
             break;
         }
     }
 
     // If it's a duplicate, return early
-    if(isDuplicate) {
+    if (isDuplicate)
+    {
         Bluefruit.Scanner.resume();
         return;
-    }    
+    }
 
     // XX:XX:XX:XX:XX:XX + null terminator
     sprintf(mac_addr, "%02X%02X%02X%02X%02X%02X",
-            report->peer_addr.addr[5], report->peer_addr.addr[4], 
-            report->peer_addr.addr[3], report->peer_addr.addr[2], 
+            report->peer_addr.addr[5], report->peer_addr.addr[4],
+            report->peer_addr.addr[3], report->peer_addr.addr[2],
             report->peer_addr.addr[1], report->peer_addr.addr[0]);
 
     // Add new beacon to seen list
-    if(seenBeacons.size() < MAX_BEACONS) {
+    if (seenBeacons.size() < MAX_BEACONS)
+    {
         seenBeacons.push_back(BeaconEntry{addr, now, {0}, report->rssi});
         strncpy(seenBeacons.back().mac_addr, mac_addr, sizeof(seenBeacons.back().mac_addr) - 1);
         seenBeacons.back().mac_addr[sizeof(seenBeacons.back().mac_addr) - 1] = '\0';
@@ -432,44 +452,48 @@ void NRF52Bluetooth::scan_callback(ble_gap_evt_adv_report_t* report)
     Bluefruit.Scanner.resume();
 }
 
-void NRF52Bluetooth::getBeaconsMacAddr(char* buffer, size_t bufferSize, size_t count) {
+void NRF52Bluetooth::getBeaconsMacAddr(char *buffer, size_t bufferSize, size_t count)
+{
     size_t offset = 0;
-    for(size_t i = 0; i < count && i < seenBeacons.size(); ++i) {
-        const auto& beacon = seenBeacons[i];
+    for (size_t i = 0; i < count && i < seenBeacons.size(); ++i)
+    {
+        const auto &beacon = seenBeacons[i];
         int written = snprintf(buffer + offset, bufferSize - offset, "%s,", beacon.mac_addr);
         LOG_INFO("DBG written: %s", buffer);
-        if (written < 0 || static_cast<size_t>(written) >= bufferSize - offset) {
-            LOG_INFO("DBG Break - Not enough space in buffer");
+        if (written < 0 || static_cast<size_t>(written) >= bufferSize - offset)
+        {
             break; // Buffer is full or an error occurred
         }
         offset += written;
     }
-    if (offset > 0 && offset < bufferSize) {
+    if (offset > 0 && offset < bufferSize)
+    {
         buffer[offset - 1] = '\0'; // Replace the last space with a null terminator
     }
 }
 
 bool NRF52Bluetooth::startSniffing(uint16_t delayS)
-{   
+{
     unsigned long scanStartTime = millis();
     uint16_t scanDuration = delayS * 1000;
     numberOfBeacon = 0;
 
     // Clear seen beacons
     seenBeacons.clear();
-    
+
     // Start scanning
     Bluefruit.Scanner.setRxCallback(scan_callback);
     Bluefruit.Scanner.restartOnDisconnect(true);
-    Bluefruit.Scanner.setInterval(160, 80);       // in units of 0.625 ms
-    Bluefruit.Scanner.useActiveScan(false);        // Request scan response data
-    Bluefruit.Scanner.start(0); 
-    
+    Bluefruit.Scanner.setInterval(160, 80); // in units of 0.625 ms
+    Bluefruit.Scanner.useActiveScan(false); // Request scan response data
+    Bluefruit.Scanner.start(0);
+
     // Wait until scan is complete
-    while (millis() - scanStartTime < scanDuration) {
+    while (millis() - scanStartTime < scanDuration)
+    {
         delay(1);
     }
-    Bluefruit.Scanner.stop(); 
+    Bluefruit.Scanner.stop();
 
     // Sort beacons by RSSI
     std::sort(seenBeacons.begin(), seenBeacons.end(), CompareBeaconRSSI());

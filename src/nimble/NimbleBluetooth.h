@@ -20,8 +20,13 @@ struct CompareBeaconRSSI
   }
 };
 
+// Forward declaration
+class ScanCallbacks;
+
 class NimbleBluetooth : BluetoothApi
 {
+  friend class ScanCallbacks;
+
 public:
   void setup();
   void shutdown();
@@ -43,6 +48,7 @@ private:
 
   void setupService();
   void startAdvertising();
+  static void formatMacAddress(const std::string &input, char *output, size_t outputSize);
 };
 
 void setBluetoothEnable(bool enable);
