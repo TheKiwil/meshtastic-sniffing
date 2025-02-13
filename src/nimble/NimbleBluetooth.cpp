@@ -18,18 +18,26 @@ NimBLEServer *bleServer;
 
 static bool passkeyShowing;
 static std::vector<std::string> foundDevices;
+std::vector<BeaconEntry> NimbleBluetooth::seenBeacons;
 
-class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-    void onResult(NimBLEAdvertisedDevice* advertisedDevice) override {
+class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks
+{
+    void onResult(NimBLEAdvertisedDevice *advertisedDevice) override
+    {
+        char mac_addr[18] = {0};
+        uint32_t now = millis();
+
         std::string address = advertisedDevice->getAddress().toString();
         // Only add unique addresses
-        if (std::find(foundDevices.begin(), foundDevices.end(), address) == foundDevices.end()) {
+        if (std::find(foundDevices.begin(), foundDevices.end(), address) == foundDevices.end())
+        {
+            LOG_DEBUG("DBG - detected");
             foundDevices.push_back(address);
         }
     }
 };
 
-static ScanCallbacks* scanCallbacks = new ScanCallbacks();
+static ScanCallbacks *scanCallbacks = new ScanCallbacks();
 
 class BluetoothPhoneAPI : public PhoneAPI
 {
@@ -68,11 +76,14 @@ class NimbleBluetoothToRadioCallback : public NimBLECharacteristicCallbacks
         LOG_INFO("To Radio onwrite");
         auto val = pCharacteristic->getValue();
 
-        if (memcmp(lastToRadio, val.data(), val.length()) != 0) {
+        if (memcmp(lastToRadio, val.data(), val.length()) != 0)
+        {
             LOG_DEBUG("New ToRadio packet");
             memcpy(lastToRadio, val.data(), val.length());
             bluetoothPhoneAPI->handleToRadio(val.data(), val.length());
-        } else {
+        }
+        else
+        {
             LOG_DEBUG("Drop dup ToRadio packet we just saw");
         }
     }
@@ -97,7 +108,8 @@ class NimbleBluetoothServerCallback : public NimBLEServerCallbacks
     {
         uint32_t passkey = config.bluetooth.fixed_pin;
 
-        if (config.bluetooth.mode == meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN) {
+        if (config.bluetooth.mode == meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN)
+        {
             LOG_INFO("Use random passkey");
             // This is the passkey to be entered on peer - we pick a number >100,000 to ensure 6 digits
             passkey = random(100000, 999999);
@@ -106,7 +118,8 @@ class NimbleBluetoothServerCallback : public NimBLEServerCallbacks
 
         powerFSM.trigger(EVENT_BLUETOOTH_PAIR);
 #if HAS_SCREEN
-        screen->startAlert([passkey](OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) -> void {
+        screen->startAlert([passkey](OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) -> void
+                           {
             char btPIN[16] = "888888";
             snprintf(btPIN, sizeof(btPIN), "%06u", passkey);
             int x_offset = display->width() / 2;
@@ -129,8 +142,7 @@ class NimbleBluetoothServerCallback : public NimBLEServerCallbacks
             String deviceName = "Name: ";
             deviceName.concat(getDeviceName());
             y_offset = display->height() == 64 ? y_offset + FONT_HEIGHT_LARGE - 6 : y_offset + FONT_HEIGHT_LARGE + 5;
-            display->drawString(x_offset + x, y_offset + y, deviceName);
-        });
+            display->drawString(x_offset + x, y_offset + y, deviceName); });
 #endif
         passkeyShowing = true;
 
@@ -141,7 +153,8 @@ class NimbleBluetoothServerCallback : public NimBLEServerCallbacks
     {
         LOG_INFO("BLE authentication complete");
 
-        if (passkeyShowing) {
+        if (passkeyShowing)
+        {
             passkeyShowing = false;
             screen->endAlert();
         }
@@ -151,7 +164,8 @@ class NimbleBluetoothServerCallback : public NimBLEServerCallbacks
     {
         LOG_INFO("BLE disconnect");
 
-        if (bluetoothPhoneAPI) {
+        if (bluetoothPhoneAPI)
+        {
             bluetoothPhoneAPI->close();
         }
     }
@@ -194,7 +208,8 @@ bool NimbleBluetooth::isConnected()
 
 int NimbleBluetooth::getRssi()
 {
-    if (bleServer && isConnected()) {
+    if (bleServer && isConnected())
+    {
         auto service = bleServer->getServiceByUUID(MESH_SERVICE_UUID);
         uint16_t handle = service->getHandle();
         return NimBLEDevice::getClientByID(handle)->getRssi();
@@ -212,7 +227,8 @@ void NimbleBluetooth::setup()
     NimBLEDevice::init(getDeviceName());
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
-    if (config.bluetooth.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN) {
+    if (config.bluetooth.mode != meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
         NimBLEDevice::setSecurityAuth(BLE_SM_PAIR_AUTHREQ_BOND | BLE_SM_PAIR_AUTHREQ_MITM | BLE_SM_PAIR_AUTHREQ_SC);
         NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
         NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
@@ -232,13 +248,16 @@ void NimbleBluetooth::setupService()
     NimBLECharacteristic *ToRadioCharacteristic;
     NimBLECharacteristic *FromRadioCharacteristic;
     // Define the characteristics that the app is looking for
-    if (config.bluetooth.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN) {
+    if (config.bluetooth.mode == meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN)
+    {
         ToRadioCharacteristic = bleService->createCharacteristic(TORADIO_UUID, NIMBLE_PROPERTY::WRITE);
         FromRadioCharacteristic = bleService->createCharacteristic(FROMRADIO_UUID, NIMBLE_PROPERTY::READ);
         fromNumCharacteristic = bleService->createCharacteristic(FROMNUM_UUID, NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ);
         logRadioCharacteristic =
             bleService->createCharacteristic(LOGRADIO_UUID, NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ, 512U);
-    } else {
+    }
+    else
+    {
         ToRadioCharacteristic = bleService->createCharacteristic(
             TORADIO_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_AUTHEN | NIMBLE_PROPERTY::WRITE_ENC);
         FromRadioCharacteristic = bleService->createCharacteristic(
@@ -262,7 +281,7 @@ void NimbleBluetooth::setupService()
 
     // Setup the battery service
     NimBLEService *batteryService = bleServer->createService(NimBLEUUID((uint16_t)0x180f)); // 0x180F is the Battery Service
-    BatteryCharacteristic = batteryService->createCharacteristic( // 0x2A19 is the Battery Level characteristic)
+    BatteryCharacteristic = batteryService->createCharacteristic(                           // 0x2A19 is the Battery Level characteristic)
         (uint16_t)0x2a19, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY, 1);
 
     NimBLE2904 *batteryLevelDescriptor = (NimBLE2904 *)BatteryCharacteristic->createDescriptor((uint16_t)0x2904);
@@ -285,7 +304,8 @@ void NimbleBluetooth::startAdvertising()
 /// Given a level between 0-100, update the BLE attribute
 void updateBatteryLevel(uint8_t level)
 {
-    if ((config.bluetooth.enabled == true) && bleServer && nimbleBluetooth->isConnected()) {
+    if ((config.bluetooth.enabled == true) && bleServer && nimbleBluetooth->isConnected())
+    {
         BatteryCharacteristic->setValue(&level, 1);
         BatteryCharacteristic->notify();
     }
@@ -299,7 +319,8 @@ void NimbleBluetooth::clearBonds()
 
 void NimbleBluetooth::sendLog(const uint8_t *logMessage, size_t length)
 {
-    if (!bleServer || !isConnected() || length > 512) {
+    if (!bleServer || !isConnected() || length > 512)
+    {
         return;
     }
     logRadioCharacteristic->notify(logMessage, length, true);
@@ -315,10 +336,11 @@ void clearNVS()
 
 void NimbleBluetooth::setupSniffing()
 {
-    if (!NimBLEDevice::getInitialized()) {
+    if (!NimBLEDevice::getInitialized())
+    {
         NimBLEDevice::init(getDeviceName());
     }
-    
+
     pBLEScan = NimBLEDevice::getScan();
     pBLEScan->setAdvertisedDeviceCallbacks(scanCallbacks);
     pBLEScan->setActiveScan(false);
@@ -326,40 +348,49 @@ void NimbleBluetooth::setupSniffing()
     pBLEScan->setWindow(99);
 }
 
-void NimbleBluetooth::startSniffing(uint16_t delayS)
+bool NimbleBluetooth::startSniffing(uint16_t delayS)
 {
-    if (!pBLEScan) {
+    if (!pBLEScan)
+    {
         setupSniffing();
     }
-    
+
     // Clear previous results
     foundDevices.clear();
     pBLEScan->clearResults();
-    
+
     // Start scanning
+    pBLEScan->setDuplicateFilter(true);
     pBLEScan->start(delayS, false);
+    pBLEScan->stop();
+
+    return (foundDevices.size() > 0);
 }
 
-void NimbleBluetooth::getBeaconsMacAddr(char* buffer, size_t bufferSize, size_t count)
+void NimbleBluetooth::getBeaconsMacAddr(char *buffer, size_t bufferSize, size_t count)
 {
-    if (!buffer || bufferSize == 0) {
+    if (!buffer || bufferSize == 0)
+    {
         return;
     }
-    
+
     // Format MAC addresses into the provided buffer
     size_t written = 0;
     size_t devicesFound = std::min(count, foundDevices.size());
-    
+
     buffer[0] = '\0';
-    for (size_t i = 0; i < devicesFound; i++) {
+    for (size_t i = 0; i < devicesFound; i++)
+    {
         size_t remaining = bufferSize - written;
-        if (remaining <= 1) break;  // No space left for more addresses
-        
-        int result = snprintf(buffer + written, remaining, "%s%s", 
-                            i > 0 ? "," : "", // Add comma between addresses
-                            foundDevices[i].c_str());
-                            
-        if (result < 0 || result >= remaining) break;
+        if (remaining <= 1)
+            break; // No space left for more addresses
+
+        int result = snprintf(buffer + written, remaining, "%s%s",
+                              i > 0 ? "," : "", // Add comma between addresses
+                              foundDevices[i].c_str());
+
+        if (result < 0 || result >= remaining)
+            break;
         written += result;
     }
 }
