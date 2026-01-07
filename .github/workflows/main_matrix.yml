@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         name: Checkout base
       - id: jsonStep
         run: |
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build base
         id: base
         uses: ./.github/actions/setup-base
@@ -185,7 +185,7 @@ jobs:
     needs: [check]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
@@ -211,7 +211,7 @@ jobs:
       ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
@@ -298,7 +298,7 @@ jobs:
       ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -381,7 +381,7 @@ jobs:
     needs: [release-artifacts]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
         uses: actions/setup-python@v5
